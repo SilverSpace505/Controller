@@ -13,6 +13,7 @@ window.addEventListener("gamepaddisconnected", (event) => {
     delete gamepads[event.gamepad.index]
 })
 
+var playersO = {}
 var players = {}
 var gamepads = {}
 var camera = {x: 0, y: 0, zoom: 1}
@@ -23,6 +24,8 @@ var su = 0
 
 var bullets = []
 var explosions = []
+
+var keyboard = false
 
 function toScreen(x, y) {
     return [x+canvas.width/2, y+canvas.height/2]
@@ -50,6 +53,15 @@ function update(timestamp) {
     ui.getSu()
     input.setGlobals()
 
+    if (wConnect && !document.hidden) {
+        connectToServer()
+        wConnect = false
+    }
+
+    if (Object.values(keys).includes(true)) {
+        keyboard = true
+    }
+
     ui.rect(canvas.width/2, canvas.height/2, canvas.width, canvas.height, [0, 0, 0, 1])
 
     var gamepads2 = navigator.getGamepads()
@@ -74,6 +86,77 @@ function update(timestamp) {
         }
     }
 
+    if (keyboard) {
+        gamepads["5"] = {index: 5}
+        gamepads["5"].axes = [Boolean(keys["KeyD"]) - Boolean(keys["KeyA"]), Boolean(keys["KeyS"]) - Boolean(keys["KeyW"])]
+        gamepads["5"].buttons = {a: keys["KeyW"], b: keys["KeyS"], lt: keys["ShiftLeft"], rt: keys["Space"]}
+        gamepads["5"].lbuttons = {start: jKeys["KeyG"]}
+    }
+
+    for (let player in playerData) {
+        if (player != id && !(player in playersO)) {
+            playersO[player] = {}
+        }
+    }
+
+    for (let player in playersO) {
+        if (!(player in playerData) || player == id) {
+            delete playersO[player]
+        } else {
+            let players = playersO[player]
+            let pd = playerData[player].players
+            for (let player2 in pd) {
+                if (!(player2 in players)) {
+                    players[player2] = {x: pd[player2].x, y: pd[player2].y, angle: pd[player2].angle, trail: []}
+                }
+            }
+            for (let player2 in players) {
+                if (!(player2 in pd)) {
+                    delete players[player2]
+                } else {
+                    players[player2].x = lerp(players[player2].x, pd[player2].x, delta*5)
+                    players[player2].y = lerp(players[player2].y, pd[player2].y, delta*5)
+                    players[player2].angle = lerp(players[player2].angle, pd[player2].angle, delta*5)
+                    
+                    players[player2].trail.push([players[player2].x, players[player2].y, pd[player2].trail])
+                    while (players[player2].trail.length > 50) {
+                        players[player2].trail.splice(0, 1)
+                    }
+
+                    let c = hslToRgb(parseInt(player2)/4 * 360, 100, 50)
+
+                    ctx.lineWidth = 5*su
+                    ctx.lineJoin = "round"
+                    ctx.beginPath()
+                    ctx.moveTo(...toScreen(players[player2].trail[0][0], players[player2].trail[0][1]))
+                    let i = 0
+                    for (let point of players[player2].trail) {
+                        ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${i/players[player2].trail.length})`
+                        ctx.lineTo(...toScreen(point[0], point[1]))
+                        if (point[2]) ctx.stroke()
+
+                        ctx.beginPath()
+                        ctx.moveTo(...toScreen(point[0], point[1]))
+                        i++
+                    }
+
+                    ctx.beginPath()
+                    players[player2].angle -= Math.PI/2
+                    let s = 1
+                    ctx.moveTo(...toScreen(players[player2].x+rotv2({x: -7.5*su*s, y: -10*su*s}, players[player2].angle).x, players[player2].y+rotv2({x: -7.5*su*s, y: -10*su*s}, players[player2].angle).y))
+                    ctx.lineTo(...toScreen(players[player2].x+rotv2({x: 0*su, y: -7.5*su*s}, players[player2].angle).x, players[player2].y+rotv2({x: 0*su, y: -7.5*su*s}, players[player2].angle).y))
+                    ctx.lineTo(...toScreen(players[player2].x+rotv2({x: 7.5*su*s, y: -10*su*s}, players[player2].angle).x, players[player2].y+rotv2({x: 7.5*su*s, y: -10*su*s}, players[player2].angle).y))
+                    ctx.lineTo(...toScreen(players[player2].x+rotv2({x: 0*su, y: 10*su*s}, players[player2].angle).x, players[player2].y+rotv2({x: 0*su, y: 10*su*s}, players[player2].angle).y))
+                    ctx.lineTo(...toScreen(players[player2].x+rotv2({x: -7.5*su*s, y: -10*su*s}, players[player2].angle).x, players[player2].y+rotv2({x: -7.5*su*s, y: -10*su*s}, players[player2].angle).y))
+                    players[player2].angle += Math.PI/2
+                    ctx.fillStyle = `rgb(${c.r}, ${c.g}, ${c.b})`
+                    ctx.fill()
+                }
+            }
+        }
+    }
+
+
     for (let gamepad in gamepads) {
         if (!(gamepad in players)) {
             players[gamepad] = {x: 0, y: 0, vx: 0, vy: 0, cooldown: 0, angle: Math.PI, trail: []}
@@ -93,7 +176,7 @@ function update(timestamp) {
             i--
         } else {
             for (let player in players) {
-                if (player != bullet.id && Math.sqrt((bullet.x - players[player].x)**2 + (bullet.y - players[player].y)**2) < 20*su) {
+                if (player != bullet.id && id == bullet.nid && Math.sqrt((bullet.x - players[player].x)**2 + (bullet.y - players[player].y)**2) < 20*su) {
                     let c2 = hslToRgb(parseInt(player)/4 * 360, 100, 50)
                     createExplosion(players[player].x, players[player].y, [c2.r, c2.g, c2.b, 1])
                     players[player].x = Math.random()*500 - 250
@@ -101,6 +184,20 @@ function update(timestamp) {
                     bullets.splice(i, 1)
                     i--
                     break
+                }
+            }
+            if (bullet.nid == id) {
+                for (let player in playersO) {
+                    for (let player2 in playersO[player]) {
+                        if (Math.sqrt((bullet.x - playersO[player][player2].x)**2 + (bullet.y - playersO[player][player2].y)**2) < 20*su) {
+                            let c2 = hslToRgb(parseInt(player2)/4 * 360, 100, 50)
+                            createExplosion(playersO[player][player2].x, playersO[player][player2].y, [c2.r, c2.g, c2.b, 1])
+                            sendMsg({hit: [player, player2], explosion: [playersO[player][player2].x, playersO[player][player2].y, [c2.r, c2.g, c2.b, 1]]})
+                            bullets.splice(i, 1)
+                            i--
+                            break
+                        }
+                    }
                 }
             }
         }
@@ -131,7 +228,8 @@ function update(timestamp) {
             }
             if (buttons.rt && players[player].cooldown <= 0) {
                 players[player].cooldown = 0.2
-                bullets.push({id: player, lifetime: 0, x: players[player].x, y: players[player].y, angle: players[player].angle})
+                bullets.push({id: player, nid: id, lifetime: 0, x: players[player].x, y: players[player].y, angle: players[player].angle})
+                sendMsg({bullet: {id: player, nid: id, lifetime: 0, x: players[player].x, y: players[player].y, angle: players[player].angle}})
             }
 
             players[player].vx = lerp(players[player].vx, 0, 0.05*delta*100)
@@ -158,15 +256,13 @@ function update(timestamp) {
             ctx.moveTo(...toScreen(players[player].trail[0][0], players[player].trail[0][1]))
             let i = 0
             for (let point of players[player].trail) {
-                if (point[2]) {
-                    ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${i/players[player].trail.length})`
-                    ctx.lineTo(...toScreen(point[0], point[1]))
-                    ctx.stroke()
+                ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${i/players[player].trail.length})`
+                ctx.lineTo(...toScreen(point[0], point[1]))
+                if (point[2]) ctx.stroke()
 
-                    ctx.beginPath()
-                    ctx.moveTo(...toScreen(point[0], point[1]))
-                    i++
-                }
+                ctx.beginPath()
+                ctx.moveTo(...toScreen(point[0], point[1]))
+                i++
             }
 
             ctx.beginPath()
@@ -200,6 +296,11 @@ function update(timestamp) {
     for (let i = 0; i < gamepads2.length; i++) if (gamepads2[i] != null) amt++
     ui.text(10*su, 20*su, 40*su, "Controllers Connected: " + amt)
     // ui.text(10*su, 60*su, 10*su, JSON.stringify(navigator.getGamepads()), {wrap: 500*su})
+
+    data.players = {}
+    for (let player in players) {
+        data.players[player] = {x: players[player].x, y: players[player].y, angle: players[player].angle, trail: gamepads[player].buttons.lt}
+    }
 
     input.updateInput()
 }
