@@ -146,7 +146,7 @@ function update(timestamp) {
         }
     }
 
-    ui.text(10*su, 20*su, 40*su, "Controllers Connected:", gamepads2.length)
+    ui.text(10*su, 20*su, 40*su, "Controllers Connected: " + gamepads2.length)
 
     input.updateInput()
 }
