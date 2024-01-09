@@ -4,13 +4,13 @@ utils.setStyles()
 utils.setGlobals()
 
 window.addEventListener("gamepadconnected", (event) => {
-    console.log("Gamepad connected!", event.gamepad.id)
-    gamepads[event.gamepad.id] = {id: event.gamepad.id, buttons: {}, lbuttons: {}, axes: []}
+    console.log("Gamepad connected!", event.gamepad.index)
+    gamepads[event.gamepad.index] = {id: event.gamepad.index, buttons: {}, lbuttons: {}, axes: []}
 })
 
 window.addEventListener("gamepaddisconnected", (event) => {
-    console.log("Gamepad disconnected :(", event.gamepad.id)
-    delete gamepads[event.gamepad.id]
+    console.log("Gamepad disconnected :(", event.gamepad.index)
+    delete gamepads[event.gamepad.index]
 })
 
 var players = {}
@@ -44,20 +44,19 @@ function update(timestamp) {
     var gamepads2 = navigator.getGamepads()
     for (let i = 0; i < gamepads2.length; i++) {
         var gamepad = gamepads2[i]
-
         if (gamepad) {
-            gamepads[gamepad.id].axes = [...gamepad.axes]
-            for (let i in gamepads[gamepad.id].axes) {
-                if (Math.abs(gamepads[gamepad.id].axes[i]) < 0.1) {
-                    gamepads[gamepad.id].axes[i] = 0
+            gamepads[gamepad.index].axes = [...gamepad.axes]
+            for (let i in gamepads[gamepad.index].axes) {
+                if (Math.abs(gamepads[gamepad.index].axes[i]) < 0.1) {
+                    gamepads[gamepad.index].axes[i] = 0
                 }
             }
-            let last = {...gamepads[gamepad.id].buttons}
-            gamepads[gamepad.id].buttons = getButtons(gamepad.buttons)
-            gamepads[gamepad.id].lbuttons = {}
+            let last = {...gamepads[gamepad.index].buttons}
+            gamepads[gamepad.index].buttons = getButtons(gamepad.buttons)
+            gamepads[gamepad.index].lbuttons = {}
             if (last) {
-                for (let button in gamepads[gamepad.id].buttons) {
-                    gamepads[gamepad.id].lbuttons[button] = gamepads[gamepad.id].buttons[button] && !last[button]
+                for (let button in gamepads[gamepad.index].buttons) {
+                    gamepads[gamepad.index].lbuttons[button] = gamepads[gamepad.index].buttons[button] && !last[button]
                 }
             }
             // console.log(gamepads[gamepad.id].buttons)
@@ -146,7 +145,10 @@ function update(timestamp) {
         }
     }
 
-    ui.text(10*su, 20*su, 40*su, "Controllers Connected: " + gamepads2.length)
+    let amt = 0
+    for (let i = 0; i < gamepads2.length; i++) if (gamepads2[i] != null) amt++
+    ui.text(10*su, 20*su, 40*su, "Controllers Connected: " + amt)
+    // ui.text(10*su, 60*su, 10*su, JSON.stringify(navigator.getGamepads()), {wrap: 500*su})
 
     input.updateInput()
 }
